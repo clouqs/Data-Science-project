@@ -5,4 +5,6 @@
 
 * La cartella "html maps" contiene le mappe coropletiche esportate in formato HTML.<br>
 
+N.B. quando si scarica il progetto bisogna compilare tutte le celle per visualizzare i grafici.
+
 ## 15/07/2025
