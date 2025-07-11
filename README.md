@@ -1,5 +1,7 @@
 # README.md
 Il dataset utilizzato si trova nella cartella "assets". Il suo link [kaggle](https://www.kaggle.com/datasets/atharvasoundankar/global-cybersecurity-threats-2015-2024?resource=download).
-
+---
 Le slides si trovano all'interno della cartella "assets/presentazione".
 ---
+
+## 15/07/2025
