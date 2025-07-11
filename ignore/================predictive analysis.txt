@@ -1,0 +1,176 @@
+================predictive analysis (da rivedere)====================
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import RobustScaler, OneHotEncoder, LabelEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.feature_selection import SelectKBest, f_classif
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+
+# Caricamento dati
+data = pd.read_csv('assets/Global_Cybersecurity_Threats_2015-2024 - edit.csv')
+
+# 1. Codifica le etichette
+label_encoder = LabelEncoder()
+data['Attack_Type_Encoded'] = label_encoder.fit_transform(data['Attack Type'])
+
+# 2. Feature engineering
+data['Year_sin'] = np.sin(2 * np.pi * (data['Year'] - 2015)/10)
+data['Year_cos'] = np.cos(2 * np.pi * (data['Year'] - 2015)/10)
+data['Loss_per_User'] = data['Financial Loss (in Million $)'] / (data['Number of Affected Users'] + 1e-5)
+data['Resolution_Efficiency'] = data['Number of Affected Users'] / (data['Incident Resolution Time (in Hours)'] + 1e-5)
+
+# 3. Definizione colonne
+categorical_cols = data.select_dtypes(include='object').columns.drop('Attack Type')
+numeric_cols = ['Financial Loss (in Million $)', 'Number of Affected Users', 
+                'Incident Resolution Time (in Hours)', 'Year_sin', 'Year_cos',
+                'Loss_per_User', 'Resolution_Efficiency']
+
+# 4. Preprocessing pipeline
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', RobustScaler(), numeric_cols),
+        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_cols)
+    ])
+
+# 5. Pipeline completa
+pipeline = Pipeline([
+    ('preprocessor', preprocessor),
+    ('feature_selection', SelectKBest(f_classif, k=20)),
+    ('classifier', XGBClassifier(
+        objective='multi:softmax',
+        eval_metric='mlogloss',
+        n_estimators=300,
+        early_stopping_rounds=20,
+        random_state=42
+    ))
+])
+
+# 6. Split dei dati in train/validation/test
+X = data.drop(['Attack Type', 'Attack_Type_Encoded'], axis=1)
+y = data['Attack_Type_Encoded']
+
+# Prima divisione: train + temp
+X_train, X_temp, y_train, y_temp = train_test_split(
+    X, y, test_size=0.3, stratify=y, random_state=42)
+
+# Seconda divisione: validation + test
+X_val, X_test, y_val, y_test = train_test_split(
+    X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
+
+# 7. Addestramento con early stopping
+print("Inizio addestramento...")
+
+# Preprocessiamo i dati manualmente per ottenere i dati di validazione
+X_train_preprocessed = preprocessor.fit_transform(X_train)
+X_val_preprocessed = preprocessor.transform(X_val)
+
+# Feature selection
+selector = SelectKBest(f_classif, k=20)
+X_train_selected = selector.fit_transform(X_train_preprocessed, y_train)
+X_val_selected = selector.transform(X_val_preprocessed)
+
+# Addestramento con validation set
+classifier = XGBClassifier(
+    objective='multi:softmax',
+    eval_metric='mlogloss',
+    n_estimators=300,
+    early_stopping_rounds=20,
+    random_state=42
+)
+
+classifier.fit(
+    X_train_selected, y_train,
+    eval_set=[(X_val_selected, y_val)],
+    verbose=True
+)
+
+# 8. Valutazione sul test set
+X_test_preprocessed = preprocessor.transform(X_test)
+X_test_selected = selector.transform(X_test_preprocessed)
+y_pred = classifier.predict(X_test_selected)
+
+# Decodifica le etichette
+y_test_decoded = label_encoder.inverse_transform(y_test)
+y_pred_decoded = label_encoder.inverse_transform(y_pred)
+
+print("\nClassification Report:")
+print(classification_report(y_test_decoded, y_pred_decoded))
+
+# 9. Matrice di confusione
+plt.figure(figsize=(10,8))
+cm = confusion_matrix(y_test_decoded, y_pred_decoded, labels=label_encoder.classes_)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=label_encoder.classes_, 
+            yticklabels=label_encoder.classes_)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.xticks(rotation=45)
+plt.yticks(rotation=0)
+plt.show()
+
+# 10. Feature importance
+feature_names = numeric_cols + list(preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_cols))
+selected_features = [feature_names[i] for i in selector.get_support(indices=True)]
+
+importances = classifier.feature_importances_
+feature_importance = pd.DataFrame({'Feature': selected_features, 'Importance': importances})
+feature_importance = feature_importance.sort_values('Importance', ascending=False)
+
+plt.figure(figsize=(10,6))
+sns.barplot(x='Importance', y='Feature', data=feature_importance.head(20))
+plt.title('Top 20 Feature Importances')
+plt.show()
+
+print("\nTop 10 Features:")
+print(feature_importance.head(10))
+
+# 11. Analisi distribuzione classi
+plt.figure(figsize=(10,6))
+data['Attack Type'].value_counts().plot(kind='bar')
+plt.title('Distribution of Attack Types')
+plt.xticks(rotation=45)
+plt.show()
+
+
+
+====================
+Poor Model Performance:
+
+Accuracy is only 18%, which is barely better than random guessing (16.7% for 6 classes)
+
+All classes show similarly low precision, recall, and F1-scores (ranging 0.13-0.27)
+
+The multi-class log loss (mlogloss) on validation increases during training (from 1.79 to 1.90), suggesting the model isn't learning useful patterns
+
+Training Behavior:
+
+The increasing validation loss indicates the model is overfitting to the training data
+
+Early stopping triggered after 20 rounds with no improvement
+
+Potential Issues:
+
+Data-Related Problems:
+
+Class imbalance (visible in your distribution plot)
+
+Possible weak relationship between features and target
+
+Feature selection might be removing important variables
+
+Temporal leakage (if using future data to predict past events)
+
+Model-Related Problems:
+
+XGBoost might not be the best algorithm for this data structure
+
+Default hyperparameters may not be optimal
+
+The k=20 feature selection might be too restrictive
+==============================

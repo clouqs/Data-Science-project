@@ -1,0 +1,89 @@
+================COMBINED PLOTS====================
+from plotly.subplots import make_subplots
+
+fig_combined = make_subplots(
+    rows=2, cols=2,
+    specs=[[{"type": "geo", "colspan": 2}, None],
+           [{"type": "geo"}, {"type": "geo"}]],
+    subplot_titles=('Users Affected by Cyber Attacks', 
+                   'Financial Losses', 'Incident Response Time'),
+    vertical_spacing=0.1,
+    horizontal_spacing=0.1,
+    column_widths=[0.5, 0.5]
+)
+
+fig_combined.add_trace(
+    go.Choropleth(
+        locations=df_users['Country'],
+        z=df_users['Number of Affected Users'],
+        locationmode='country names',
+        colorscale=COLORS['users'],
+        showscale=True,
+        colorbar=dict(x=1.0, len=0.4, y=0.75, thickness=20)
+    ),
+    row=1, col=1
+)
+
+fig_combined.add_trace(
+    go.Choropleth(
+        locations=df_loss['Country'],
+        z=df_loss['Financial Loss (in Million $)'],
+        locationmode='country names',
+        colorscale=COLORS['financial'],
+        showscale=True,
+        colorbar=dict(x=0.45, len=0.4, y=0.25, thickness=20)
+    ),
+    row=2, col=1
+)
+
+fig_combined.add_trace(
+    go.Choropleth(
+        locations=df_response['Country'],
+        z=df_response['Incident Resolution Time (in Hours)'],
+        locationmode='country names',
+        colorscale=COLORS['response'],
+        showscale=True,
+        colorbar=dict(x=1.0, len=0.4, y=0.25, thickness=20)
+    ),
+    row=2, col=2
+)
+
+fig_combined.update_layout(
+    title=dict(
+        text='<b>Global Cybersecurity Threat Dashboard (2015-2024)</b>',
+        x=0.5,
+        y=0.95,
+        font=dict(size=24, family=FONT_FAMILY, color='#2c3e50')
+    ),
+    height=800,
+    width=1400,
+    margin=dict(t=100, b=50, l=50, r=50),
+    paper_bgcolor='white',
+    font=dict(family=FONT_FAMILY)
+)
+
+fig_combined.update_geos(
+    showframe=False,
+    showcoastlines=True,
+    coastlinecolor='#34495e',
+    projection_type='natural earth',
+    row=1, col=1
+)
+
+fig_combined.update_geos(
+    showframe=False,
+    showcoastlines=True,
+    coastlinecolor='#34495e',
+    projection_type='natural earth',
+    row=2, col=1
+)
+
+fig_combined.update_geos(
+    showframe=False,
+    showcoastlines=True,
+    coastlinecolor='#34495e',
+    projection_type='natural earth',
+    row=2, col=2
+)
+
+fig_combined.show()
